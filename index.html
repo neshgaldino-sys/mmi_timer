@@ -29,7 +29,7 @@
 <body>
   <div class="app">
     <h1>MMI 3–5–1 Timer</h1>
-    <p>Enter the number of stations, then press <b>Play</b>. Each station runs <b>3</b> minutes → <b>5</b> minutes → <b>1</b> minutes with a short buzzer between phases.</p>
+    <p>Enter the number of stations, then press <b>Play</b>. Each station runs <b>3</b> minutes → <b>5</b> minutes → <b>1</b> minute with a short buzzer between phases.</p>
 
     <div class="row" style="margin-top:12px">
       <div class="input">
@@ -39,6 +39,7 @@
       <button id="play">Play</button>
       <button id="pause" disabled>Pause</button>
       <button id="stop" disabled>Stop</button>
+      <button id="skip" disabled>Skip</button>
       <span class="pill" id="loopInfo">Idle</span>
     </div>
 
@@ -71,128 +72,65 @@
   const playBtn = document.getElementById('play');
   const pauseBtn = document.getElementById('pause');
   const stopBtn = document.getElementById('stop');
+  const skipBtn = document.getElementById('skip');
   const round = document.getElementById('round');
   const phase = document.getElementById('phase');
   const clock = document.getElementById('clock');
   const loopInfo = document.getElementById('loopInfo');
   const phaseLen = document.getElementById('phaseLen');
 
-  // Use external buzzer sound file
-  function buzzer(){
-    const audio = new Audio('buzzer.wav');
-    audio.play().catch(()=>{});
-  }
+  function buzzer(){ const audio = new Audio('buzzer.wav'); audio.play().catch(()=>{}); }
+  function fmt(sec){ const m=Math.floor(sec/60); const s=sec%60; return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`; }
 
-  function fmt(sec){
-    const m = Math.floor(sec/60); const s = sec % 60;
-    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-  }
+  let abort=false, running=false, paused=false, skipRequested=false;
 
   function countdown(ms, onTick){
-    return new Promise(resolve => {
-      let end = performance.now() + ms;
-      let localPausedAt = 0;
-      let frozen = null;
-      const iv = setInterval(() => {
-        if (abort) { clearInterval(iv); resolve('aborted'); return; }
-        // Handle pause/resume without losing remaining time
-        if (paused) {
-          if (!localPausedAt) localPausedAt = performance.now();
-          if (frozen === null) {
-            const leftNow = Math.max(0, end - performance.now());
-            frozen = Math.ceil(leftNow/1000);
-          }
-          onTick?.(frozen);
-          return;
-        } else if (localPausedAt) {
-          end += performance.now() - localPausedAt; // extend end by paused duration
-          localPausedAt = 0;
-          frozen = null;
-        }
-        const left = Math.max(0, end - performance.now());
+    return new Promise(resolve=>{
+      let end=performance.now()+ms;
+      let localPausedAt=0; let frozen=null;
+      const iv=setInterval(()=>{
+        if(abort){clearInterval(iv);resolve('aborted');return;}
+        if(skipRequested){clearInterval(iv);skipRequested=false;resolve('skipped');return;}
+        if(paused){
+          if(!localPausedAt)localPausedAt=performance.now();
+          if(frozen===null){const leftNow=Math.max(0,end-performance.now());frozen=Math.ceil(leftNow/1000);} 
+          onTick?.(frozen);return;
+        } else if(localPausedAt){end+=performance.now()-localPausedAt;localPausedAt=0;frozen=null;}
+        const left=Math.max(0,end-performance.now());
         onTick?.(Math.ceil(left/1000));
-        if (left <= 0) { clearInterval(iv); resolve(); }
-      }, 200);
+        if(left<=0){clearInterval(iv);resolve();}
+      },200);
     });
   }
 
-  let abort = false, running = false, paused = false;
+  stopBtn.addEventListener('click',()=>{abort=true;paused=false;loopInfo.textContent='Stopping…';stopBtn.disabled=true;pauseBtn.disabled=true;skipBtn.disabled=true;playBtn.disabled=false;});
+  pauseBtn.addEventListener('click',()=>{if(!running)return;paused=!paused;pauseBtn.textContent=paused?'Resume':'Pause';loopInfo.textContent=paused?'Paused':'Running';});
+  skipBtn.addEventListener('click',()=>{if(running){skipRequested=true;}});
 
-  stopBtn.addEventListener('click', () => {
-    abort = true;
-    paused = false;
-    loopInfo.textContent = 'Stopping…';
-    stopBtn.disabled = true;
-    pauseBtn.disabled = true;
-    pauseBtn.textContent = 'Pause';
-    playBtn.disabled = false;
-  });
+  playBtn.addEventListener('click',async()=>{
+    if(running)return;
+    const total=Math.max(1,Math.floor(+stationsEl.value||1));
+    stationsEl.value=total;
+    running=true;abort=false;paused=false;skipRequested=false;
+    playBtn.disabled=true;stopBtn.disabled=false;pauseBtn.disabled=false;skipBtn.disabled=false;
+    loopInfo.textContent=`Running ${total} station${total>1?'s':''}`;
 
-  pauseBtn.addEventListener('click', () => {
-    if (!running) return;
-    paused = !paused;
-    pauseBtn.textContent = paused ? 'Resume' : 'Pause';
-    loopInfo.textContent = paused ? 'Paused' : loopInfo.textContent.replace('Paused', '') || 'Running';
-  });
+    const phases=[{name:'Reading time',ms:3*60*1000},{name:'Response time',ms:5*60*1000},{name:'Probing question',ms:1*60*1000}];
 
-  playBtn.addEventListener('click', async () => {
-    if (running) return;
-    const total = Math.max(1, Math.floor(+stationsEl.value || 1));
-    stationsEl.value = total;
-
-    running = true; abort = false; paused = false;
-    playBtn.disabled = true; stopBtn.disabled = false; pauseBtn.disabled = false; pauseBtn.textContent = 'Pause';
-    loopInfo.textContent = `Running ${total} station${total>1?'s':''}`;
-
-    const phases = [
-      { name: 'Reading time', ms: 3*60*1000 },
-      { name: 'Response time', ms: 5*60*1000 },
-      { name: 'Probing question', ms: 1*60*1000 },
-    ];
-
-    for (let i=1; i<=total && !abort; i++){
-      round.textContent = `${i} / ${total}`;
-      for (const p of phases){
-        phase.textContent = p.name;
-        phaseLen.textContent = fmt(Math.floor(p.ms/1000));
+    for(let i=1;i<=total&&!abort;i++){
+      round.textContent=`${i} / ${total}`;
+      for(const p of phases){
+        phase.textContent=p.name;
+        phaseLen.textContent=fmt(Math.floor(p.ms/1000));
         buzzer();
-        const r = await countdown(p.ms, s => { clock.textContent = fmt(s); });
-        if (abort || r === 'aborted') break;
+        const r=await countdown(p.ms,s=>{clock.textContent=fmt(s);});
+        if(abort||r==='aborted')break;
       }
-      if (!abort) buzzer(); // station end
+      if(!abort)buzzer();
     }
 
-    running = false;
-    playBtn.disabled = false; stopBtn.disabled = true; pauseBtn.disabled = true; pauseBtn.textContent = 'Pause';
-    loopInfo.textContent = abort ? 'Stopped' : 'Done';
-    phase.textContent = '—'; phaseLen.textContent = '—'; clock.textContent = '00:00';
+    running=false;playBtn.disabled=false;stopBtn.disabled=true;pauseBtn.disabled=true;skipBtn.disabled=true;loopInfo.textContent=abort?'Stopped':'Done';phase.textContent='—';phaseLen.textContent='—';clock.textContent='00:00';
   });
-
-  // ---- Lightweight self-tests (optional): run with ?test=1 ----
-  (function runTestsIfRequested(){
-    const usp = new URLSearchParams(location.search);
-    if (usp.get('test') !== '1') return;
-    console.group('OSCE Timer tests');
-    console.assert(fmt(0) === '00:00', 'fmt 0');
-    console.assert(fmt(5) === '00:05', 'fmt 5');
-    console.assert(fmt(65) === '01:05', 'fmt 65');
-    const start1 = performance.now();
-    countdown(300).then(()=>{
-      const d1 = performance.now() - start1;
-      console.assert(d1 >= 250 && d1 <= 900, 'countdown ~300ms', d1);
-      // Pause test (best‑effort): pause for ~300ms and ensure overall lasts longer
-      const start2 = performance.now();
-      (async ()=>{
-        setTimeout(()=>{ paused = true; }, 100);
-        setTimeout(()=>{ paused = false; }, 450);
-        await countdown(300);
-        const d2 = performance.now() - start2;
-        console.assert(d2 >= 600, 'pause extends countdown');
-        console.groupEnd();
-      })();
-    });
-  })();
-
 })();
 </script>
 </body>
