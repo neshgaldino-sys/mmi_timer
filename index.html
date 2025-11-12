@@ -145,9 +145,9 @@
     loopInfo.textContent = `Running ${total} station${total>1?'s':''}`;
 
     const phases = [
-      { name: 'Door Instructions', ms: 3*60*1000 },
-      { name: 'History (+ Physical) ', ms: 6*60*1000 },
-      { name: 'Wrap‑up', ms: 1*60*1000 },
+      { name: 'Reading time', ms: 3*60*1000 },
+      { name: 'Response time', ms: 6*60*1000 },
+      { name: 'Probing question', ms: 1*60*1000 },
     ];
 
     for (let i=1; i<=total && !abort; i++){
