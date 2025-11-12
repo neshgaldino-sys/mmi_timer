@@ -29,7 +29,7 @@
 <body>
   <div class="app">
     <h1>OSCE 2–8–3 Timer</h1>
-    <p>Enter the number of stations, then press <b>Play</b>. Each station runs <b>2</b> minutes → <b>8</b> minutes → <b>3</b> minutes with a short buzzer between phases.</p>
+    <p>Enter the number of stations, then press <b>Play</b>. Each station runs <b>3</b> minutes → <b>5</b> minutes → <b>1</b> minutes with a short buzzer between phases.</p>
 
     <div class="row" style="margin-top:12px">
       <div class="input">
@@ -79,7 +79,7 @@
 
   // Use external buzzer sound file
   function buzzer(){
-    const audio = new Audio('buzzer.mp3');
+    const audio = new Audio('buzzer.wav');
     audio.play().catch(()=>{});
   }
 
@@ -145,9 +145,9 @@
     loopInfo.textContent = `Running ${total} station${total>1?'s':''}`;
 
     const phases = [
-      { name: 'Door Instructions', ms: 2*60*1000 },
-      { name: 'History (+ Physical) ', ms: 8*60*1000 },
-      { name: 'Wrap‑up', ms: 3*60*1000 },
+      { name: 'Door Instructions', ms: 3*60*1000 },
+      { name: 'History (+ Physical) ', ms: 6*60*1000 },
+      { name: 'Wrap‑up', ms: 1*60*1000 },
     ];
 
     for (let i=1; i<=total && !abort; i++){
